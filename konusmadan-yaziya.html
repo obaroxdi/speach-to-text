@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Konuşmadan Yazıya</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 640px; margin: 24px auto; padding: 0 16px; }
+  textarea { width: 100%; height: 220px; padding: 12px; font-size: 16px; box-sizing: border-box; border-radius: 8px; border: 1px solid #aaa; }
+  .row { display: flex; gap: 8px; margin: 12px 0; flex-wrap: wrap; }
+  button { padding: 10px 16px; font-size: 16px; border: 0; border-radius: 8px; cursor: pointer; background: #2563eb; color: #fff; }
+  button.stop { background: #dc2626; }
+  button.gray { background: #6b7280; }
+  #durum { font-size: 14px; color: #555; }
+</style>
+</head>
+<body>
+  <h2>🎤 Konuşmadan Yazıya</h2>
+
+  <div class="row">
+    <button id="baslat">Başlat</button>
+    <button id="durdur" class="stop">Durdur</button>
+    <button id="kopyala" class="gray">Kopyala</button>
+    <button id="temizle" class="gray">Temizle</button>
+  </div>
+  <div id="durum">Hazır</div>
+
+  <textarea id="metin" placeholder="Konuştuğun yazı burada görünecek..."></textarea>
+
+<script>
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const durum = document.getElementById('durum');
+  const metin = document.getElementById('metin');
+
+  if (!SR) {
+    durum.textContent = 'Bu tarayıcı desteklemiyor. Chrome veya Edge kullan.';
+  } else {
+    const tanima = new SR();
+    tanima.lang = 'tr-TR';          // dil: Türkçe
+    tanima.continuous = true;       // sürekli dinle
+    tanima.interimResults = true;   // konuşurken canlı göster
+
+    let kesinMetin = '';
+    let calisiyor = false;  // tarayıcı şu an gerçekten dinliyor mu
+    let istiyor = false;    // kullanıcı dinlemeyi istiyor mu
+
+    function baslat() {
+      if (calisiyor) return;
+      try { tanima.start(); } catch (err) { /* zaten başlamış, yok say */ }
+    }
+
+    tanima.onresult = (e) => {
+      let gecici = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const yazi = e.results[i][0].transcript;
+        if (e.results[i].isFinal) kesinMetin += yazi + ' ';
+        else gecici += yazi;
+      }
+      metin.value = kesinMetin + gecici;
+    };
+
+    tanima.onstart = () => { calisiyor = true; durum.textContent = '🔴 Dinleniyor...'; };
+    tanima.onend = () => {
+      calisiyor = false;
+      // Tarayıcı kendiliğinden durdurduysa kısa bekleyip yeniden başlat
+      if (istiyor) setTimeout(baslat, 300);
+      else durum.textContent = 'Durdu';
+    };
+    tanima.onerror = (e) => {
+      if (e.error === 'no-speech' || e.error === 'aborted') return;
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') istiyor = false;
+      durum.textContent = 'Hata: ' + e.error;
+    };
+
+    document.getElementById('baslat').onclick = () => {
+      kesinMetin = metin.value ? metin.value + ' ' : '';
+      istiyor = true;
+      baslat();
+    };
+    document.getElementById('durdur').onclick = () => { istiyor = false; tanima.stop(); };
+    document.getElementById('temizle').onclick = () => { kesinMetin = ''; metin.value = ''; };
+    document.getElementById('kopyala').onclick = () => {
+      navigator.clipboard.writeText(metin.value);
+      durum.textContent = 'Kopyalandı ✅';
+    };
+  }
+</script>
+</body>
+</html>
